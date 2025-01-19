@@ -1,0 +1,211 @@
+#! /usr/bin/python3
+
+import os
+import re
+import time
+import argparse
+import clipboard
+import youtube_dl
+import subprocess
+from pathlib import Path
+
+def check_args ( args, parser ):
+    
+    # Need either test or input_url
+    if not args.test and not args.input_url:
+        parser.print_help()
+        print ( "ERROR: Please provide input url" ) 
+        exit()
+    else:
+        print (args)
+
+def clean_string ( dirty_string ):
+
+    # Replace _ with spaces:
+    clean_string = dirty_string.replace( "_", " ")
+
+    # Remove Non-AlphaNumeric Characters
+    clean_string = re.sub("[^a-zA-Z0-9 ]", "", clean_string)
+    #                                 ^space here is important (keeps spaces in clean_string)
+
+    # Trim Whitespace
+    clean_string = clean_string.strip()
+
+    return clean_string
+
+def get_info ( url ):
+    ydl = youtube_dl.YoutubeDL({})
+
+    with ydl:
+        result = ydl.extract_info(
+            url,
+            download=False # We just want to extract the info
+        )
+
+    return result
+
+def get_title_and_author ( info ):
+
+    # Get defaults
+    title = clean_string ( info['title'] )
+    author = clean_string ( info['uploader'] )
+
+    if not args.use_defaults:
+        res = input ( "Select Title [enter to use default]: {}\n".format ( title ) )
+        if res != "":
+            title = res
+
+        res = input ( "Select Author [enter to use default]: {}\n".format ( author ) )
+        if res != "":
+            author = res
+
+    print("Title: {}".format(title))
+    print("Author: {}".format(author))
+
+    return title, author
+
+def create_directory_name ( title, author ):
+
+    # Capitalize and replace spaces
+    title_str = title.title().replace( " ", "-" )
+    author_str = author.title().replace ( " ", "-" )
+
+    dir_name = "_".join ( [title_str, author_str] )
+    return dir_name
+
+def make_directory ( dir_path, dir_name, force ):
+
+    fullpath = os.path.join ( dir_path, dir_name )
+    Path(fullpath).mkdir(parents=True, exist_ok=force)
+    if os.path.exists(fullpath):
+        print ( "Created directory at: {}".format ( fullpath ) )
+    else:
+        print ( "ERROR: Directory exists at: {}".format ( fullpath ) )
+
+    subprocess.Popen ( "xdg-open {}".format(fullpath).split(" ") )
+
+    return fullpath
+
+def create_audio_filename ( title, author, ext ):
+    
+    # Lowercase and replace spaces
+    title_str = title.lower().replace( " ", "-" )
+    author_str = author.lower().replace ( " ", "-" )
+
+    filename = "_".join ( [title_str, author_str] )
+    filename += "." + ext
+
+    return filename
+
+def download_audio_file ( url, title, author, fullpath, ext ):
+
+    audio_filename = create_audio_filename ( title, author, ext )
+    audio_filepath = os.path.join ( fullpath, audio_filename )
+
+    ydl_opts = {
+        'format': 'bestaudio/mp3',
+        'outtmpl': audio_filepath,
+        'noplaylist': True,
+        'extract-audio': True,
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': ext,
+            'preferredquality': '192',
+        }],
+    }
+
+    ydl = youtube_dl.YoutubeDL ( ydl_opts )
+
+    with ydl:
+        result = ydl.extract_info( url, download=True )
+        
+        print ("Downloaded Audio File of Size: {}".format ( Path(audio_filepath).stat().st_size ) )
+
+    # Need to do this because, YtDL extracts audio files as webm (matroska) video containers
+    # Reaper can't open these so we need to reencode it as an audio file
+    reencode_audio ( audio_filepath, ext )
+    print ("Re-encoded Audio File Size: {}".format ( Path(audio_filepath).stat().st_size ) )
+
+    return audio_filepath
+
+def reencode_audio ( audio_filepath, ext ):
+
+    # Convert from webm video to audio file
+    audio_webm = audio_filepath[:-4] + ".webm"
+    cmd1 = "mv {orig} {webm}".format( orig=audio_filepath, webm=audio_webm)
+    cmd2 = "ffmpeg -i {webm} -vn -ab 128k -ar 44100 -y {orig}".format ( webm=audio_webm, orig=audio_filepath)
+    cmd3 = "rm {webm}".format ( webm=audio_webm )
+
+    print ( "Re-encoding downloaded file as {ext}:".format ( ext=ext ) )
+    print(cmd1)
+    print(cmd2)
+    ret1 = subprocess.run ( cmd1.split(' ') )
+    ret2 = subprocess.run ( cmd2.split(' ') )
+    ret3 = subprocess.run ( cmd3.split(' ') )
+
+def create_project_file ( audio_filepath, args ):
+
+    # Get project_filepath
+    project_filepath = audio_filepath[:-4]+".RPP"
+
+    cmd = "{app} {audio} -saveas {project}".format ( app=args.application, audio=audio_filepath, project=project_filepath )
+    clipboard.copy ( cmd )
+    print ( "Running command (copied to clipboard):\n\n{}\n\n".format ( cmd ) )
+    
+    ret = subprocess.Popen ( cmd.split(' ') )
+
+    if args.close:
+        sleeptime = 5 # seconds
+        print("Closing in: ", end="", flush=True)
+        for counter in range(1, sleeptime+1)[::-1]:
+            print(" {} ".format(counter), end="", flush=True)
+            time.sleep(1)
+        print()
+        ret.kill()
+    
+def main ( args ):
+
+    # Get Title and Author
+    if args.test:
+        url = "http://www.youtube.com/watch?v=BaW_jenozKc" 
+    else:
+        url = args.input_url
+
+    info = get_info ( url )
+    title, author = get_title_and_author ( info )
+
+    # Create Directory using title and author
+    dir_name = create_directory_name ( title, author )
+    print("Directory Name: {}".format ( dir_name ) )
+
+    fullpath = make_directory ( args.output_directory, dir_name, args.force )
+
+    # Download Audio File with correct file name
+    audio_filepath = download_audio_file ( url, title, author, fullpath, args.extension )
+
+    # Create reaper file with correct file (from template project)
+    create_project_file ( audio_filepath, args )
+
+    # Finished!
+    print ( "New Project Initialized! ")
+
+if __name__ == "__main__":
+
+    print("Running Reaper Setup")
+    
+    # Parse Arguments
+    parser = argparse.ArgumentParser(description='Setup Reaper with new audio files')
+    parser.add_argument('-t', '--test', dest='test', action='store_true', help='Run with test url (overrides input url)')
+    parser.add_argument('-i', '--input-url', dest='input_url', type=str, help='YouTube url for audio')
+    parser.add_argument('-D', '--use-defaults', dest='use_defaults', action='store_true', help='Use default values extracted from url metadata')
+    parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/home/vinay/Music', help='Directory to create new reaper project in')
+    parser.add_argument('-a', '--application', type=str, default='/home/vinay/opt/REAPER/reaper', help="Path to application (e.g. reaper) executable")
+    parser.add_argument('-e', '--extension', type=str, default='mp3', help="Audio extension to use [mp3, wav, ...]")
+    parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    parser.add_argument('-C', '--close', action="store_true", help="Do not open application after project is setup")
+    # parser.add_argument('-T', '--project-template', dest='template', type=str, default="/home/vinay/.config/REAPER/ProjectTemplates/template.RPP", help="Location of project template file to use")
+    args = parser.parse_args()
+    check_args ( args, parser )
+
+    # Run Main
+    main(args)

@@ -1,0 +1,543 @@
+#! /usr/bin/python3 
+# 
+# Task Prioritizer
+# Semi-automatically sort a task list into the most important tasks 
+# 
+# 
+
+import os 
+home = os.environ["HOME"]
+
+import argparse
+from datetime import datetime as dt
+import subprocess
+import clipboard
+import collections
+import copy
+import math
+import getch
+
+
+## Shitty Global Variables
+numCompares = 0
+numTasks = 0
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    parser = argparse.ArgumentParser(description='Utility for creating/organizing task lists') 
+    
+    # Add Arguments
+    parser.add_argument('-c', '--create', dest="create", action="store_true", help="Create a new task list")
+    parser.add_argument('-t', '--title', dest='title', type=str, help='Name of new task list [if empty date will be used]')
+    parser.add_argument('-s', '--sort-file', dest='sort_file', type=str, help='Path to task list for Sorting')
+    parser.add_argument('-d', '--directory', dest='dir', type=str, default="{}/obsidian-garden/Tasks".format(home), help='Path to directory with task lists')
+    parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force overwriting when creating new task list")
+    parser.add_argument('-q', '--quiet', dest="quiet", action="store_true", help="Suppress debug information")
+    parser.add_argument('--app', dest="app", type=str, default="code", help="Executable to use for opening new task list (default vscode, set empty to skip opening)")
+    parser.add_argument('-e', '--extension', dest='ext', type=str, default='md', help="extension for todo list (optional)")
+
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    
+    # Check Condition 
+    if not args.sort_file and not args.create:
+        parser.print_help()
+        print ( "ERROR: Please use the --create argument or provide input for the --sort-file argument" )
+        exit()
+    elif not args.create and not os.path.exists ( args.sort_file ):
+        print ( "ERROR: Provided file does not exist: [{}]".format ( args.sort_file ) )
+        exit()
+    else:
+        print ( args )
+
+def get_todays_date_string ():
+
+    today = dt.today()
+    datestring = today.strftime ( "%B %d, %Y" )
+    return datestring
+
+def get_template ():
+
+    template = """
+# Task List {date}
+# Description: 
+#   Blank lines are ignored
+#   The format is any line starting with '#' is treated as description and is ignored
+#       The group of '#' lines at the top of the file is considered the header
+#   Any line beginning with '-' is treated as a task
+#       Subtasks are defined by the number of spaces preceding the '-' char (every 2 spaces is a new subtask)
+#       Subtasks are recursively sorted under their parent task
+
+- Task 1
+- Task 2
+  - Task 2a
+    - Task 2ai
+  - Task 2b
+    - Task 2bi
+      - Task 2bi1
+      - Task 2bi2
+      - Task 2bi3
+- Task 3
+  - Task 3a
+     - Task 3ai
+
+""".format ( date=get_todays_date_string() )
+
+    return template
+
+def get_new_tasklist_filename ( ext ):
+    today = dt.today().strftime ( "%Y-%m-%d" )
+    filename = "ToDo_{date}.{ext}".format( date=today, ext=ext )
+    return filename
+
+def create_new_tasklist_filepath ( tasklist_dir, tasklist_name, force ):
+
+    filepath = os.path.join ( tasklist_dir, tasklist_name )
+
+    if os.path.exists ( filepath ) and not force:
+        print ( "ERROR: File already exists at: {}".format ( filepath ) )
+        exit ( 1 )
+
+    else:
+        print ( "Creating file at: {}".format ( filepath ) )
+
+    return filepath
+    
+def write_tasklist_contents ( filepath, contents ):
+    
+    with open ( filepath, 'w' ) as f:
+        f.write(contents)
+
+def get_tasklist_template_file ( args ):
+    print ( "Creating new task list template file" )
+
+    # Get file name
+    if args.title:
+        filename = "{}.{}".format(args.title, args.ext)
+    else:
+        filename = get_new_tasklist_filename ( args.ext )
+
+    # Create New File
+    filepath = create_new_tasklist_filepath ( args.dir, filename, args.force )
+
+    return filepath
+
+def open_tasklist ( app, filepath ):
+
+    if app:
+        subprocess.Popen ( [app, filepath ] )
+
+def ford_johnson_sort ( arr ):
+
+    N = len ( arr )
+
+    # Group elements into N/2 pairs (last element is it's own pair if N is odd)
+
+    # Sort each pair (find the largest element for each pair)
+
+    # Sort the largest elements from all pairs in ascending order (this is the chain S)
+
+    # Insert at the start the element that was paired with the smallest element of S (i.e. S[0])
+
+    # Insert the remaining elements into S one at a time 
+    #   Pick elements using a special ordering
+    #   Use binary search to find the position in S to insert
+    
+    pass
+
+def compare_tasks ( task1, task2 ):
+    global numCompares, numTasks
+
+    valid_rets = ['1','2']
+
+    ret = " "
+    while ret not in valid_rets:
+        print ( """
+Does Task 1 have more or equal priority over Task 2?
+---------------
+Task 1: 
+{}
+---------------
+Task 2:
+{}
+---------------
+Please enter [{}/{}] ({} of ~{})
+""".format ( task1.__str__(), task2.__str__(), valid_rets[0], valid_rets[1], numCompares, int ( numTasks * math.log(numTasks) ) ) )
+        
+        ret = getch.getche() # also displayed on the screen
+
+        ret = ret.strip().lower()[0]
+        if ret[0] == valid_rets[0]:
+            return True
+        elif ret[0] == valid_rets[1]:
+            return False
+        else:
+            print ("Please provide valid input [{}/{}]".format(*valid_rets))
+    
+
+def merge_sort ( arr, hasGreaterPriorityFunc ):
+
+    N = len ( arr )
+
+    # Base case: Empty/1-Element array is sorted
+    if N <= 1:
+        return arr 
+    
+    # Split array into 2 halves
+    mid = N // 2
+    left_array = arr[:mid] # excludes middle
+    right_array = arr[mid:] # includes middle
+
+    # Call mergesort on first half
+    left_array = merge_sort ( left_array, hasGreaterPriorityFunc )
+    
+    # Call mergesort on second half
+    right_array = merge_sort ( right_array, hasGreaterPriorityFunc )
+    
+    # merge 2 halves together
+    return merge ( left_array, right_array, hasGreaterPriorityFunc )
+
+def merge ( left, right, hasGreaterPriorityFunc ):
+    global numCompares
+    result = []
+
+    while left and right:
+        numCompares += 1
+        
+        # If left has greater priority, it should come earlier in the list
+        if hasGreaterPriorityFunc ( left[0], right[0] ): 
+            elem = left.pop(0)
+        else:
+            elem = right.pop(0)
+        result.append ( elem )
+
+    if left:
+        result += left
+    else:
+        result += right 
+
+    return result
+
+def insertion_sort ( arr, hasGreaterPriorityFunc ):
+    
+    # Iterate over array elements:
+    for ii in range (1,  len ( arr ) ):
+        curr = arr[ii]
+
+        # Compare to previous elements
+        jj = ii - 1
+        while jj >= 0 and hasGreaterPriorityFunc ( curr, arr[jj] ):
+            arr[jj+1] = arr[jj]
+            jj -= 1
+
+        arr[jj+1] = curr
+
+
+
+    """
+    Test : [5,2,34,1] (low number is higher priority)
+
+    ii = 1, curr = 2
+        jj = 0: hasGreaterPriority(2,5) --> yes
+            [5,5,34,1]
+    [2,5,34,1]
+
+    ii = 2, curr = 34
+        jj = 1: hasGreaterPriority(34,5) --> no
+    [2,5,34,1]
+
+    ii = 3, curr = 1
+        jj = 2: hasGreaterPriority(1,34) --> yes
+            [2,5,34,34]
+        jj = 1: hasGreaterPriority(1,5) --> yes
+            [2,5,5,34]
+        jj = 0:
+            [2,2,5,34]
+
+    [1,2,5,34]
+    
+    
+
+
+    """
+
+class Task:
+
+    def __init__ ( self, depth, text="", parent_task=None, subtasks=[] ):
+        self.depth = depth
+        self._text = text
+        self._parent = parent_task
+        self._subtasks = subtasks
+        self._subtasks_sorted = False
+
+    def sort_subtasks ( self ):
+
+        """
+        if numSubtasks ≤ 1 
+            subtasks are sorted
+        otherwise:
+            sort my subtasks using merge sort
+        
+        for each subtask:
+            sort them
+        """
+
+        if len ( self._subtasks ) <= 1:
+            self._subtasks_sorted = True
+        else:
+            self._subtasks = merge_sort ( self._subtasks, compare_tasks )
+            self._subtasks_sorted = True 
+
+        for task in self._subtasks:
+            task.sort_subtasks()
+
+    def __str__ ( self ):
+        text =  "Description: {}\n".format ( self._text )
+        text += "Depth: {}\n".format ( self.depth )
+        text += "Parent Task: {}\n".format ( self._parent._text if self._parent else "None" )
+        text += "Number of Subtasks: {}\n".format ( len ( self._subtasks ) )
+
+        # text = "Task: {}\nDepth: {}\nParent Task: {}\nNumber of Sub Tasks: {}".format ( self._text, self.depth, self._parent, len ( self._subtasks ) )
+        return text
+
+    def print ( self ): 
+        print ( self )
+        
+class TaskFile:
+
+    def __init__ ( self, verbose = True ):
+        self.header = []
+        self._root_task = Task ( -1 )
+        self._taskToken = '-'
+        self._verbose = verbose
+    
+    def _parse_header ( self, f ):
+
+        # Reset header        
+        self.header = []
+
+        # State initializations
+        last2Tokens = ["", ""]
+        headerFinished = False
+        
+        while not headerFinished:
+            line = f.readline()
+            token = "" if len (line) == 0 else line[0]
+
+            # Check if finshed
+            if last2Tokens[0] == '#' and last2Tokens[1] == '#' and token != '#':
+                headerFinished = True
+            
+            self.header.append ( line )
+
+            # Update state
+            last2Tokens[0] = last2Tokens [1]
+            last2Tokens[1] = token
+
+    def _get_all_tasks ( self, f ):
+        
+        all_tasks = []
+
+        line = f.readline() # Read first line
+        while line:
+
+            # Check if task line:
+            numWhiteSpace = len ( line ) - len ( line.lstrip(' ') )
+            
+            if numWhiteSpace < len ( line ): 
+                firstNonWhiteChar = line [ numWhiteSpace ]
+            else:
+                firstNonWhiteChar = None
+            
+            isTaskLine = ( firstNonWhiteChar == self._taskToken )
+
+            if isTaskLine:
+                
+                # Get Level
+                depth = numWhiteSpace // 2
+
+                # Create task
+                task = Task ( depth, line )
+
+                # Store task
+                all_tasks.append ( task )
+
+            line = f.readline()
+        
+        return tuple ( all_tasks )
+
+    def _organize_all_tasks_under_root ( self, all_tasks ):
+
+        # Define helper function
+        def attach_to_parent ( parent, task ):
+            parent._subtasks.append ( task )
+            task._parent = parent 
+
+            if self._verbose:
+                print ( "[{}] is the parent of [{}]".format(parent._text, task._text))
+                print ( "Parent Task [{}] has [{}] subtasks\n".format(parent._text, len ( parent._subtasks ) ) )
+        
+        # Initializations
+        self._root_task._subtasks = []
+        currentParent = self._root_task
+
+        for ii in range ( len ( all_tasks ) ):
+            task = copy.deepcopy ( all_tasks[ii] )
+            depth = task.depth
+
+            print ("{}) ".format(ii), end="")
+            # numSubtasks = [ len ( t._subtasks ) for t in all_tasks ]
+            # print (numSubtasks)
+            # print ( len (self._root_task._subtasks) )
+            assert len ( task._subtasks ) == 0
+
+            # End of file:
+            if ii == len ( all_tasks ) - 1: 
+                print("End of file")
+                # no subtasks
+                attach_to_parent ( currentParent, task )
+            
+            # Siblings:
+            elif depth == all_tasks[ii+1].depth:
+                print("Siblings")
+                # no subtask
+                # current parent is the same
+                attach_to_parent ( currentParent, task )
+            
+            # Next Task is Older
+            elif depth > all_tasks[ii+1].depth:
+                print("Next Older")
+                # no subtasks
+                attach_to_parent ( currentParent, task )
+                # update current parent to last common ancestor
+                """
+                    Go up the chain until ancestor.depth < nextLevel (should equal nextLevel-1)
+                """
+                ancestor = currentParent
+                while ancestor.depth >= all_tasks[ii+1].depth:
+                    ancestor = ancestor._parent
+                assert ancestor.depth == all_tasks[ii+1].depth-1
+                currentParent = ancestor
+
+            # Next Task is Younger
+            elif depth < all_tasks[ii+1].depth:
+                print("Next Younger")
+                # will be subtasks, so attach to currentParent then update currentParent to self
+                attach_to_parent ( currentParent, task )
+                currentParent = task
+
+            else: 
+                print ( "ERROR in parsing tasks! - Should never get here, something is messed up in the code logic!")
+
+            # print ("{}) Current Parent: {}".format(ii, currentParent))
+            # import pdb; pdb.set_trace()
+
+    def parse ( self, filepath ):
+        global numTasks
+
+        with open ( filepath, 'r' ) as f:
+
+            # Parse Header
+            self._parse_header ( f )
+            print ( "parsed header" )
+
+            # Get All Tasks:
+            all_tasks = self._get_all_tasks ( f )
+            print ( "parsed all tasks" )
+        
+            # Organize Tasks:
+            self._organize_all_tasks_under_root ( all_tasks )
+            numTasks = len ( self._root_task._subtasks ) * 1.15
+            print ( "organized all tasks" )
+
+            print(self.header)
+            for task in all_tasks:
+                print ( task.depth, task._text )
+            
+
+    def sort_tasks ( self ):
+
+        self._root_task.sort_subtasks()
+
+    def generate_content ( self ):
+
+        # Write Header
+        content = ""
+        content += "".join ( self.header )
+
+        # Walk Tasks (DFS) and write out content
+        def walk ( task, content ):
+            
+            content += task._text.rstrip('\n') + "\n"
+            
+            for subtask in task._subtasks:
+                content = walk ( subtask, content )
+
+            return content
+
+        content = walk ( self._root_task, content )
+
+        return content
+
+def main ( args ):
+
+    if args.create:
+        # Get valid file path
+        filepath = get_tasklist_template_file ( args )
+
+        # Get template contents
+        content = get_template()
+
+    else: 
+        # Get path
+        filepath = args.sort_file
+
+        # Create new task file
+        verbose = not args.quiet
+        taskFile = TaskFile ( verbose )
+    
+        # Parse task list
+        taskFile.parse ( filepath )
+
+        # Sort tasks
+        taskFile.sort_tasks()
+
+        # Get updated task list contents
+        content = taskFile.generate_content()
+    
+    # Write task list contents:
+    write_tasklist_contents ( filepath, content ) 
+
+    # Open task list
+    open_tasklist ( args.app, filepath )
+
+    # Finished!
+    print ( "Task list updated at: {}".format ( filepath ) )
+    print ( "(copied filepath into clipboard)" )
+    clipboard.copy ( filepath )
+
+
+if __name__ == "__main__":
+
+    # import numpy as np
+    # arr = np.arange(31).tolist()
+    # np.random.shuffle ( arr )
+    # sort = merge_sort ( arr, lambda a,b: a <= b )
+    # print (arr)
+    # print (sort)
+    # print ( numCompares )
+    # exit(1)
+
+
+    print ( "Running Task List Utility" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    main ( args )

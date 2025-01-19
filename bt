@@ -1,0 +1,20 @@
+#!/bin/bash 
+
+
+declare DEV
+
+case $2 in
+	airpods) DEV="D0:65:44:E2:A0:9B";;
+	soundpeats|"") DEV="1C:52:16:1B:67:AF";;
+ 	*) echo -e "Unknown device argument [$2]\nExiting"; exit ;;
+esac
+
+if [ $1 = "conn" ]; then 
+	echo "connecting to $2"
+	echo -e "connect $DEV \nquit" | sudo bluetoothctl 
+elif [ $1 == "dconn" ]; then 
+	echo "disconnecting from $2"
+	echo -e 'disconnect \nquit' | sudo bluetoothctl 
+else 
+	echo -e "Unknown command [$1]\nExiting"; exit;
+fi 

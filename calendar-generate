@@ -1,0 +1,168 @@
+#! /usr/bin/python3 
+# 
+# 63 Day Calendar Generator Script (with dates filled in)
+# 
+# 
+# Template Version 1.1
+
+import subprocess
+import os 
+
+import argparse
+import datetime as dt
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    # TODO Add a fancy description here
+    parser = argparse.ArgumentParser(description='') 
+    
+    # Add Arguments
+    # TODO Add arguments
+    parser.add_argument('-d', '--date', dest='date', type=str, help='Start date for calendar [e.g. 2022-11-07]')
+    parser.add_argument('-w', '--weeks', dest='weeks', type=int, default=9, help='Number of weeks to create calendar for')
+    parser.add_argument('-o', '--output-directory', dest='directory', type=str, default='/home/vinay/Calendars', help='Directory to create calendar in')
+    # parser.add_argument('-', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    # parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    # # parser.add_argument('-e', '--extension', type=str, default='mp3', help="Audio extension to use [mp3, wav, ...]")
+    # parser.add_argument('-s', '--size', type=str, default='750x480', help="Image size WxH" )
+    
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    
+    # TODO Complete
+    # Check Condition 
+    if not args.date:
+        # parser.print_help()
+        # print ( "ERROR: Please provide input" )
+        # exit()
+        pass
+    else:
+        print ( args )
+
+def parse_start_date(date_string):
+    if date_string:
+        date = dt.datetime.strptime(date_string, "%Y-%m-%d")
+    else:
+        date = dt.datetime.now()
+    return date
+
+def get_starting_day_of_week(date):
+    week_start = date - dt.timedelta(days=(date.weekday()+1)) # Note date.weekday uses Monday = 0
+    return week_start
+
+def generate_dates(starting_date, num_weeks):
+
+    dates = []
+    for w in range(num_weeks):
+        week = []
+        for d in range(7):
+            date = starting_date + dt.timedelta(days=w*7+d)
+            week.append(date.strftime("%m/%d"))
+        dates.append(week)
+
+    return dates
+
+def generate_table(dates, output_directory, starting_date, showTicks=False):
+    
+    # num_weeks = len(dates)
+    x_grid_size = 8.5 / 7
+    header_height = 0.3
+    y_grid_size = (11-header_height) / 9
+
+    fig = plt.figure(figsize=(8.5, 11) ) # For standard 8.5" x 11" paper
+    ax = fig.gca()
+
+    # Create grid
+    ax.set_aspect('auto')
+    ax.set_xbound(lower=0, upper=8.5)
+    ax.set_ybound(lower=0, upper=11)
+    plt.xticks([i * x_grid_size for i in range(8)])
+    plt.yticks([i * y_grid_size for i in range(10)] + [11])
+    plt.tick_params(
+        axis='both',       # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=showTicks,      # ticks along the bottom edge are off
+        left=showTicks,        # ticks along the left edge are off
+        top=showTicks,         # ticks along the top edge are off
+        labelbottom=showTicks, # labels along the bottom edge are off
+        labelleft=showTicks    # labels along the left edge are off
+    )
+    ax.grid(color='k', linestyle='-', linewidth=1)
+    
+
+    # Add header text (days)
+    days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    for i, day in enumerate(days):
+        ax.text(s=day, x=x_grid_size*(i + 0.5), y=11-header_height, ha="center", va="bottom", fontsize=8)
+
+
+    # Add dates to each cell
+    # dates = [[f"11/{i}" for i in range(7)] for i in range(9)]
+    padding = 0.1
+    for i, week in enumerate(reversed(dates)):
+        for j, day in enumerate(week):
+            # ax.text(s=f"({((8-i)*7+j+1)})", x=x_grid_size*(j)+padding/2, y=(i+1)*y_grid_size-padding/2, ha="left", va="top", fontsize=5)
+            # ax.text(s=f"{day}", x=x_grid_size*(j+1)-padding, y=(i+1)*y_grid_size-padding, ha="right", va="top", fontsize=6)
+            ax.text(s=f"({((8-i)*7+j+1)})", x=x_grid_size*(j+1)-padding, y=(i+1)*y_grid_size-padding/2, ha="right", va="top", fontsize=5)
+            ax.text(s=f"{day}", x=x_grid_size*(j+0.5), y=(i+1)*y_grid_size-padding, ha="center", va="top", fontsize=6)
+
+
+    # Save and show figure
+    calendar_file = os.path.join(
+        output_directory,
+        f"{starting_date.strftime('%Y-%m-%d')}_calendar.pdf"
+    )
+    fig.savefig(calendar_file, format = 'pdf', bbox_inches='tight', pad_inches=0)
+    plt.show()
+
+    return calendar_file
+
+def open_calendar(calendar_file):
+    subprocess.Popen(["firefox", calendar_file])
+
+
+
+def run ( **kwargs ):
+    # TODO What's gonna happen?
+    # Get starting date
+    start_date = parse_start_date(args.date)
+
+    # Get starting week from starting date
+    week_start_date = get_starting_day_of_week(start_date)
+
+    print(week_start_date)
+
+    # Generate list of dates
+    dates = generate_dates(week_start_date, args.weeks)
+
+    # Create calendar table 
+    calendar_file = generate_table(dates, args.directory, week_start_date)
+
+    # Open file
+    open_calendar(calendar_file)
+
+    # Finished!
+    # TODO Update print statement
+    print (f"Finished! Calendar saved to: {calendar_file}")
+    
+
+
+if __name__ == "__main__":
+
+    # TODO update this description
+    print ( "Running - Calendar Generator Script" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    kwargs = dict ( args._get_kwargs() )
+    run ( **kwargs )

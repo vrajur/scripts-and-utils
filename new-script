@@ -1,0 +1,103 @@
+#! /usr/bin/python3 
+# 
+# Create a new script from the template file
+# 
+# Template Version 1.0
+
+import os 
+home = os.environ["HOME"]
+
+import argparse
+import shutil
+import subprocess
+import clipboard
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    parser = argparse.ArgumentParser(description='Tool for creating new scripts') 
+    
+    # Add Arguments
+    parser.add_argument('-n', '--name', dest='name', type=str, help='name for new script')
+    parser.add_argument('-d', '--', dest='dir', type=str, default='{}/bin'.format(home), help='Directory to create new script in')
+    parser.add_argument('-t', '--template', type=str, default='{}/bin/template.py'.format(home), help="Path to template file" )
+    parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force overwriting existing script file if one already exists")
+    parser.add_argument('--app', dest="app", type=str, default="code", help="Executable to use for opening new script (default vscode, set empty to skip opening)")
+    # parser.add_argument('-e', '--extension', type=str, default='', help="extension for script (optional)")
+    
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    
+    # Check Condition 
+    if False:
+        parser.print_help()
+        print ( "ERROR: Please provide input" )
+        exit()
+    else:
+        print ( args )
+
+def get_filename ( args ):
+
+
+    if args.name:
+        return args.name
+
+    else:
+    
+        ret = input ( "Please enter a name for the new script:\n" )
+        
+        while not ret:
+            ret = input ( "Previous input invalid - Please enter a non-empty name:\n")
+
+        filename = ret 
+        return filename
+
+def make_new_script ( template_path, script_dir, filename, force ):
+
+    filepath = os.path.join ( script_dir, filename )
+
+    if os.path.exists ( filepath ) and not force:
+        print ( "ERROR: File already exists at [{}]\nExiting".format ( filepath ) )
+        exit ( 1 )
+    else: 
+        shutil.copy ( template_path, filepath )
+
+    return filepath
+
+def open_new_script ( app, filepath ):
+
+    if app:
+        subprocess.Popen ( [app, filepath] )
+
+def main ( args ):
+    
+    # Get filename
+    filename = get_filename ( args )
+
+    # Make new script file ( Copy template file to new filepath )
+    filepath = make_new_script ( args.template, args.dir, filename, args.force )
+
+    # Open template file in vscode
+    open_new_script ( args.app, filepath )
+
+    # Finished!
+    print ( "New script successfully created at: {}".format ( filepath ) )
+    print ( "(copied filepath into clipboard)" )
+    clipboard.copy ( filepath )
+
+    pass
+
+if __name__ == "__main__":
+
+    # TODO update this description
+    print ( "Running New Script Creator" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    main ( args )

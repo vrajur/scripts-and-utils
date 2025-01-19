@@ -1,0 +1,5 @@
+#!/bin/bash
+
+obs --profile $1 --collection $1 --startrecording
+
+#obs --profile Ultrawide --collection Ultrawide --startrecording

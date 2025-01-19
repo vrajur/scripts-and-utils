@@ -1,0 +1,195 @@
+#! /usr/bin/python3 
+# 
+# Template For Scripts
+# 
+# 
+# Template Version 1.1
+
+import os 
+home = os.environ["HOME"]
+import requests
+from bs4 import BeautifulSoup
+import warnings
+import csv
+from readabilipy import simple_json_from_html_string
+
+import argparse
+
+
+
+
+class Post:
+    title = ""
+    url = ""
+    date = ""
+    preview_text = ""
+    text = ""
+
+    def pretty(self) -> str:
+        return f"{self.title} ({self.date})[{self.url}]\t{self.preview_text}"
+    
+    def write_csv(self, delim=",") -> str:
+        texts = [t['text'] for t in self.text]
+        text = "".join(texts)
+        return delim.join([self.title, self.date, self.url, self.preview_text, text])
+    
+    def __str__(self) -> str:
+        return f"{self.title} {self.date})[{self.url}]\t{self.preview_text}\t{self.text}"
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    # TODO Add a fancy description here
+    parser = argparse.ArgumentParser(description='') 
+    
+    # Add Arguments
+    # TODO Add arguments
+    parser.add_argument('-i', '--input', dest='input', type=str, default="https://www.howtomarketagame.com/blog", help='URL to scrape')
+    parser.add_argument('--page_start', dest='page_start', type=int, default=1, help='What page to start scraping from (default 1)')
+    parser.add_argument('--num_pages', dest='num_pages', type=int, default=-1, help='Max number of pages to scrape (default -1, means scrape all)')
+    # parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    # parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/media/vinay/Shared Storage/Data/Uncategorized', help='Directory to create new reaper project in')
+    # parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/media/vinay/Shared Storage/Data/Uncategorized', help='Directory to create new reaper project in')
+    # # parser.add_argument('-e', '--extension', type=str, default='mp3', help="Audio extension to use [mp3, wav, ...]")
+    # parser.add_argument('-s', '--size', type=str, default='750x480', help="Image size WxH" )
+    
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    
+    # TODO Complete
+    # Check Condition 
+    if not args.input:
+        parser.print_help()
+        print ( "ERROR: Please provide input" )
+        exit()
+    else:
+        print ( args )
+
+
+def url_from_page_num(page_num:int):
+    return f"https://howtomarketagame.com/blog/page/{page_num}/"
+
+def get(url):
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"
+    }
+    response = requests.get(url, headers=headers)
+    return response
+
+def check_url_is_404(url):
+    response = get(url)
+    if response.status_code == 200:
+        return False
+    elif response.status_code == 404:
+        return True
+    else:
+        warnings.warn(f"Response returned unexpected status code: {response.status_code}")
+        import pdb; pdb.set_trace()
+        return False
+
+def find_max_num_pages(starting_guess=28, max_num_guesses=10):
+    
+    page_num = starting_guess
+    url = url_from_page_num(page_num)
+    page_is_404 = check_url_is_404(url)
+    last_guess = starting_guess + max_num_guesses
+    while not page_is_404 and page_num <= last_guess:
+        page_num += 1
+        url = url_from_page_num(page_num)
+        page_is_404 = check_url_is_404(url)
+    
+    if page_num == max_num_guesses:
+        raise RuntimeError("Reached max num guesses, did not conclusively find last blog page")
+    
+    return page_num - 1 
+    
+def get_posts_from_page(page_url):
+
+    new_posts = []
+
+    response = get(page_url)
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    # Find all article elements (which contain info for each post)
+    articles = soup.find_all("article")
+
+    for article in articles:
+        h2 = article.find("h2").find("a")
+        post = Post()
+        post.title = h2.text
+        post.url = h2.get("href")
+        try:
+            post.date = article.find("time").text
+        except:
+            pass
+        try:
+            post.preview_text = article.find("p").text
+        except:
+            pass
+        try:
+            req = get(post.url)
+            post.text = simple_json_from_html_string(req.text, use_readability=True)['plain_text']
+        except:
+            import pdb; pdb.set_trace()
+        print(post)
+        new_posts.append(post)
+    
+    return new_posts
+
+    
+
+
+
+    
+
+def run ( **kwargs ):
+    # TODO What's gonna happen?
+    # Iterate over each blog page: from 1 to 28 (https://howtomarketagame.com/blog/page/28/)
+    # for each page, parse the list of blog posts:
+    #   Save title, save link, save date, save preview text
+
+    posts = []
+    out_file = "htmag_blog_posts.csv"
+
+    with open(out_file, 'w') as f:
+        writer = csv.writer(f)
+
+        max_num_pages = find_max_num_pages()
+        if args.num_pages >= 0: # i.e. not equal to -1
+            import pdb; pdb.set_trace()
+            max_num_pages = min(max_num_pages, args.num_pages)
+        print("max_num_pages: ", max_num_pages)
+        
+        for page_idx in range(args.page_start, max_num_pages+1):
+            page_url = url_from_page_num(page_idx)
+            print(page_url)
+
+            new_posts = get_posts_from_page(page_url)
+            posts.extend(new_posts)
+            for post in new_posts:
+                try:
+                    f.write(post.write_csv(delim="<>") + "\n")
+                except:
+                    import pdb; pdb.set_trace()
+
+    # Finished!
+    print ("Finished!")
+    pass 
+
+
+if __name__ == "__main__":
+
+    # TODO update this description
+    print ( "Running - Fancy Template Script" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    kwargs = dict ( args._get_kwargs() )
+    run ( **kwargs )

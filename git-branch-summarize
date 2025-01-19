@@ -1,0 +1,141 @@
+#! /usr/bin/python3 
+# PYTHON_ARGCOMPLETE_OK
+
+# Template For Scripts
+# 
+# 
+# Template Version 1.1
+
+import os 
+home = os.environ["HOME"]
+import subprocess
+
+import argparse
+
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    # TODO Add a fancy description here
+    parser = argparse.ArgumentParser(description='Compare the number of commits ahead/behind git branches are in a repo') 
+    
+    # Add Arguments
+    # TODO Add arguments
+    parser.add_argument('-i', '--input', dest='input', type=str, help='Base branch to compare others against')
+    parser.add_argument('-t', '--target', dest='target', type=str, help='Target branch to compare others against. If not provided, compares all branches in repo')
+    # parser.add_argument('-r', '--repo', dest='repo', type=str, help='Path to git repo. If not provided, tries to use current working directory')
+    parser.add_argument('-l', '--list', dest="list", action="store_true", help="Lists all branches in current repo")
+    # parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    # parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/media/vinay/Shared Storage/Data/Uncategorized', help='Directory to create new reaper project in')
+    # # parser.add_argument('-e', '--extension', type=str, default='mp3', help="Audio extension to use [mp3, wav, ...]")
+    # parser.add_argument('-s', '--size', type=str, default='750x480', help="Image size WxH" )
+    
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    pass
+    
+    # # TODO Complete
+    # # Check Condition 
+    # if not args.input and not args.list:
+    #     parser.print_help()
+    #     print ( "ERROR: Please provide input base branch" )
+    #     exit()
+    # else:
+    #     print ( args )
+
+    # # TODO check if repo is valid path to git repo
+
+def base_branch() -> str:
+    return args.input if args.input else get_current_branch()
+
+def get_current_branch() -> str:
+    branch = ""
+    cmd = "git branch --show-current"
+    ret = subprocess.run(cmd.split(" "), stdout=subprocess.PIPE)
+    return ret.stdout.decode("utf-8").strip()
+    
+
+
+def list_branches(do_print = False) -> list[str]:
+    branches = []
+    cmd = "git branch"
+    ret = subprocess.run(cmd.split(" "), stdout=subprocess.PIPE)
+    if ret:
+        branches = ret.stdout.decode("utf-8").split("\n")
+        branches = [branch.lstrip('*').strip() for branch in branches if branch.strip()]
+
+    if do_print:
+        print(f"Branches in repo:")
+        for branch in branches:
+            print(f"\t{branch}")
+        
+
+    return branches
+    
+
+def compare_branch( base, target ) -> tuple:
+    ahead = 0
+    behind = 0
+    cmd_ahead = f"git rev-list --count {base}..{target}"
+    cmd_behind = f"git rev-list --count {target}..{base}"
+
+    ahead = int(subprocess.run(cmd_ahead.split(" "), stdout=subprocess.PIPE).stdout)
+    behind = int(subprocess.run(cmd_behind.split(" "), stdout=subprocess.PIPE).stdout)
+    # print(f"[{target}] is {ahead} commits ahead of [{base}] and {behind} commits behind")
+    return (ahead, behind)
+
+def print_results(base, results):
+
+    header = f"\nComparing branches against [{base}] in repo"
+    print(header)
+    print("-"*len(header))
+    print(f"Behind\tAhead\tBranch")
+    print("-"*len(header))
+
+    base = base_branch()
+    for key, val in results.items():
+        target = key
+        if target == base:
+            print(f"{val[1]}\t{val[0]}\t[**{target}**] (reference branch)")
+        else:
+            print(f"{val[1]}\t{val[0]}\t{target}")
+
+def run ( **kwargs ):
+    # TODO What's gonna happen?
+
+    if args.list:
+        list_branches(do_print=True)
+        return
+
+    results = {}
+    base = base_branch()
+    branches = [base, args.target] if args.target else list_branches()
+
+    for branch in branches:
+        
+        # if branch == base:
+        #     continue
+
+        target = branch
+        results[target] = compare_branch(base, target)
+
+    print_results(base, results)
+
+    # Finished!
+
+
+if __name__ == "__main__":
+
+    # TODO update this description
+    print ( "Running - Git Branch Summarizer" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    kwargs = dict ( args._get_kwargs() )
+    run ( **kwargs )

@@ -1,0 +1,134 @@
+#! /usr/bin/python3
+
+import os
+import glob
+import json
+import re
+import time
+import argparse
+import clipboard
+import youtube_dl
+import subprocess
+from pathlib import Path
+
+
+"""
+Get URL
+Make Directory
+Download Video (webm)
+Extract Images
+
+"""
+
+def check_args ( args, parser ): 
+    
+    # Check Condition TODO
+    if not args.input_url:
+        parser.print_help()
+        print ( "ERROR: Please provide input url" ) 
+        exit()
+    else:
+        print (args)
+
+def make_directory_structure ( base_dir, force ):
+
+    # Find the last directory
+    subdirs = glob.glob ( os.path.join ( base_dir, "*/" ) )
+    subdirs.sort()
+
+    lastIdx = 0
+    if len ( subdirs ) > 0:
+        lastIdx = int ( subdirs[-1][-5:-1] )
+    
+    idx = lastIdx + 1
+    
+    # Make Directories:
+    datasetDir = "dataset{:04d}".format ( idx )
+    
+    dirsToMake = { 
+        "base": os.path.join ( base_dir, datasetDir ),
+        #"images": os.path.join ( base_dir, datasetDir, "images" ),
+        "images-resized": os.path.join ( base_dir, datasetDir, "images-resized" )
+    }
+    
+    for name, fullpath in dirsToMake.items():
+        Path(fullpath).mkdir(parents=True, exist_ok=force)
+        if os.path.exists(fullpath):
+            print ( "Created directory at: {}".format ( fullpath ) )
+        else:
+            print ( "ERROR: Directory exists at: {}".format ( fullpath ) )
+
+    print(dirsToMake['base'])
+    subprocess.Popen ( ["xdg-open", dirsToMake['base']] )
+
+    return dirsToMake
+
+def download_info_and_video ( url, dirs ):
+
+    video_filepath = os.path.join ( dirs['base'], 'video.webm' )
+    video_filepath = os.path.join ( dirs['base'], '%(title)s.webm' )
+    ydl_opts = {
+        'format': 'best',
+        'outtmpl': video_filepath,
+    }
+
+    ydl = youtube_dl.YoutubeDL( ydl_opts )
+
+    with ydl:
+        result = ydl.extract_info(
+            url,
+            download=True 
+        )
+
+    save_info ( result, dirs )
+
+    return result
+
+def save_info ( info, dirs ):
+    filepath = os.path.join ( dirs['base'], "info.json" )
+    with open ( filepath, "w" ) as f:
+        json.dump ( info, f, indent=4, sort_keys=True )
+
+def extract_images ( dirs, size ):
+    video_filepath = glob.glob ( os.path.join ( dirs['base'], "*.webm" ) )[0]
+    imgdir = dirs['images-resized']
+
+    # ffmpeg to extract images (and resize)
+    cmd = ["ffmpeg", "-i", video_filepath, "-s", size, "-f", "image2", "{}/image-%09d.png".format ( imgdir ) ]
+
+    ret = subprocess.run ( cmd )
+
+def main ( args ):
+
+    # Make Directory Structure
+    dirs = make_directory_structure ( args.output_directory, args.force )
+    
+    # Download Info and Video
+    info = download_info_and_video ( args.input_url, dirs )
+
+    # Extract Images
+    extract_images ( dirs, args.size )
+
+    # Finished!
+    numImages = len ( [ name for name in os.listdir ( dirs['images-resized'] ) if os.path.isfile ( os.path.join ( dirs['images-resized'], name ) ) ] )
+    print ( "Dataset downloaded! ")
+    print ( "Number of Images: {}".format ( numImages ) )
+    print ( "Images are here: {}".format ( dirs['images-resized'] ) ) 
+    clipboard.copy ( "\"{}\"".format ( dirs['images-resized'] ) )
+
+if __name__ == "__main__":
+
+    print ("Downloading Dataset")
+
+    # Parse Arguments
+    parser = argparse.ArgumentParser(description='Download video data and extract into images')
+    parser.add_argument('-i', '--input-url', dest='input_url', type=str, help='YouTube url for dataset')
+    parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/media/vinay/Shared Storage/Data/Uncategorized', help='Directory to create new reaper project in')
+    # parser.add_argument('-e', '--extension', type=str, default='mp3', help="Audio extension to use [mp3, wav, ...]")
+    parser.add_argument('-s', '--size', type=str, default='750x480', help="Image size WxH" )
+    parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    args = parser.parse_args()
+    check_args ( args, parser )
+
+    # Run Main
+    main ( args )

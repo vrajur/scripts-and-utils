@@ -1,0 +1,8 @@
+#!/bin/bash
+
+source ~/virtualenv/meshroom/bin/activate
+cd /home/vinay/git/builds/meshroom
+LD_LIBRARY_PATH=/usr/lib/nvidia-384 
+PYTHONPATH=${PWD}
+PATH=/home/vinay/git/builds/meshroom/bin:${PATH}
+python meshroom/ui/

@@ -1,0 +1,5 @@
+#!/bin/bash 
+# Reboot windows
+
+sudo grub-reboot 2
+sudo reboot now

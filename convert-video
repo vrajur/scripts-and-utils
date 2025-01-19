@@ -1,0 +1,83 @@
+#! /usr/bin/python3 
+# 
+# Template For Scripts
+# 
+# 
+# Template Version 1.1
+
+import os 
+home = os.environ["HOME"]
+
+import argparse
+import subprocess
+
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    parser = argparse.ArgumentParser(description='Convert videos from one format to another using ffmpeg') 
+    
+    # Add Arguments
+    # TODO Add arguments
+    parser.add_argument('-i', '--input', dest='input', required=True, nargs="+", help='Input video file(s)')
+    parser.add_argument('-y', '--yes', dest="yes", action="store_true", help="Ignore confirmation about whether to proceed with conversion")
+    # parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/media/vinay/Shared Storage/Data/Uncategorized', help='Directory to create new reaper project in')
+    parser.add_argument('-e', '--extension', type=str, default='mp4', help="Output video extension to use [default: mp4]")
+    # parser.add_argument('-s', '--size', type=str, default='750x480', help="Image size WxH" )
+    
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    
+    # TODO Complete
+    # Check Condition 
+    if not args.input:
+        parser.print_help()
+        print ( "ERROR: Please provide input" )
+        exit()
+    else:
+        print ( args )
+
+def convert_file(inputfile, ext, yes):
+
+    outputfile = ".".join(inputfile.split(".")[:-1]) + "." + ext
+
+    print(f"input file: {inputfile}")
+    print(f"output file: {outputfile}")
+
+    if not yes:
+        ret = input("Continue (Y/N)?\n")
+        if not (ret == "y" or ret == "Y" or ret == ""):
+            exit(0)
+
+    cmd = f"ffmpeg -i {inputfile} -c:v libx264 -crf 19 -strict experimental {outputfile}"
+    print(cmd)
+    subprocess.Popen(cmd.split(" "))
+    
+
+def run ( **kwargs ):
+    # TODO What's gonna happen?
+
+    for file in kwargs['input']:
+        convert_file(file, kwargs['extension'], kwargs['yes'])
+
+    # Finished!
+    # TODO Update print statement
+    print ("Finished!")
+    pass 
+
+
+if __name__ == "__main__":
+
+    # TODO update this description
+    print ( "Running - Video Converter" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    kwargs = dict ( args._get_kwargs() )
+    run ( **kwargs )

@@ -1,0 +1,128 @@
+#! /usr/bin/python3 
+# 
+# Template For Scripts
+# 
+# 
+# Template Version 1.1
+
+import os 
+home = os.environ["HOME"]
+
+import argparse
+from youtube_transcript_api import YouTubeTranscriptApi
+import clipboard
+import re
+
+
+def parse_args ( ):
+
+    # Create Argument Parser
+    # TODO Add a fancy description here
+    parser = argparse.ArgumentParser(description='Script to extract transcripts and timestamps from a youtube video and copy them into the clipboard (and generate a file as well)') 
+    
+    # Add Arguments
+    # TODO Add arguments
+    parser.add_argument('-i', '--input_video_url', dest='video_url', type=str, help='The youtube video url to extract the transcripts from')
+    parser.add_argument('-o', '--output_file', dest='output_file', default="transcript.md", type=str, help='The filename to write to')
+    # parser.add_argument('-w', '--write_file', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    # parser.add_argument('-F', '--force', dest="force", action="store_true", help="Force execution for existing directory (skip mkdir) when setting up new project")
+    # parser.add_argument('-d', '--output-directory', dest='output_directory', type=str, default='/media/vinay/Shared Storage/Data/Uncategorized', help='Directory to create new reaper project in')
+    # # parser.add_argument('-e', '--extension', type=str, default='mp3', help="Audio extension to use [mp3, wav, ...]")
+    # parser.add_argument('-s', '--size', type=str, default='750x480', help="Image size WxH" )
+    
+    # Parse Args
+    args = parser.parse_args()
+
+    return args, parser
+
+def check_args ( args, parser ): 
+    
+    # TODO Complete
+    # Check Condition 
+    if not args.video_url:
+        parser.print_help()
+        print ( "ERROR: Please provide input" )
+        exit()
+    else:
+        print ( args )
+
+def clean_url(raw_url):
+    # Use regex to remove the backslashes before special characters
+    cleaned_url = re.sub(r'\\([?&=])', r'\1', raw_url)
+    return cleaned_url
+
+
+def get_id_from_url(url):
+
+    # Regex pattern to match YouTube video IDs in various formats
+    pattern = r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})"
+    
+    # Search for the pattern in the provided URL
+    match = re.search(pattern, url)
+    
+    # If a match is found, return the video ID
+    if match:
+        return match.group(1)
+    else:
+        return None
+
+def extract_transcripts(raw_url, output_file):
+    cleaned_url = clean_url(raw_url)
+    video_id = get_id_from_url(cleaned_url)
+    transcript = YouTubeTranscriptApi.get_transcript(video_id)
+    youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    lines = []
+
+    # Accumulate transcript lines with clickable timestamps
+    for entry in transcript:
+        start_time = entry['start']
+        text = entry['text']
+        
+        # Create the timestamp hyperlink
+        time_link = f"{youtube_url}&t={int(start_time)}s"
+        
+        # Append the transcript line with the timestamp link to the array
+        lines.append(f"[{int(start_time)}s]({time_link}) - {text}")
+
+    # Join the array into a single text block
+    full_text = "\n\n".join(lines)
+
+    # Copy the full text to the clipboard
+    clipboard.copy(full_text)
+
+    return full_text
+
+# Open the Markdown preview (system-dependent)
+def open_markdown_preview(output_file):
+    if os.name == 'nt':  # For Windows
+        os.system(f'start {output_file}')
+    elif os.name == 'posix':  # For Mac/Linux
+        # # For Mac
+        # os.system(f'open {output_file}')
+        # For Linux, you can use xdg-open or a specific Markdown viewer
+        os.system(f'xdg-open {output_file}')
+
+def run ( **kwargs ):
+    full_text = extract_transcripts(args.video_url, args.output_file)
+    
+    if args.output_file:
+        
+        with open(args.output_file, "w", encoding="utf-8") as file:
+            file.write(full_text)
+
+        open_markdown_preview(args.output_file)
+    
+    # Finished!
+    print ("Finished!")
+
+if __name__ == "__main__":
+
+    print ( "Running - Extract Youtube Transcripts" )
+
+    args, parser = parse_args() 
+
+    check_args ( args, parser )
+
+    kwargs = dict ( args._get_kwargs() )
+    run ( **kwargs )

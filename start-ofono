@@ -1,0 +1,9 @@
+#!/bin/bash
+
+echo "please run sudo systemctl restart ofono.service"
+
+ofono-phonesim -p 12345 /usr/share/phonesim/default.xml&
+
+/home/vinay/git/builds/ofono/test/enable-modem && \
+	~/git/builds/ofono/test/online-modem && \
+       	echo "started ofono server successfully"

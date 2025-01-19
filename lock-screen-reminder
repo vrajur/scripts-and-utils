@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#notify-send "Lock Screen Reminder" "Don't forget to stop any screen capture recordings! Lock screen using Super+Ctrl+Shift+L"
+
+
+PID=$(xdotool sleep 0.3 search --name "OBS 27.0.1" getwindowpid windowfocus --sync windowraise key ctrl+q)
+
+echo $PID
+if [ -n $PID ]; then
+	timeout 20s tail --pid=$PID -f /dev/null
+fi
+
+gnome-screensaver-command -l
