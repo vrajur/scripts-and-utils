@@ -60,7 +60,7 @@ def get_current_branch() -> str:
     
 
 
-def list_branches(do_print = False) -> list[str]:
+def list_branches(do_print = False) -> list:
     branches = []
     cmd = "git branch"
     ret = subprocess.run(cmd.split(" "), stdout=subprocess.PIPE)
